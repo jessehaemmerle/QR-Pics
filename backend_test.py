@@ -73,14 +73,15 @@ class BackendTester:
         
         try:
             if method.upper() == 'GET':
-                response = self.session.get(url, headers=request_headers)
+                response = self.session.get(url, headers=request_headers, timeout=10)
             elif method.upper() == 'POST':
-                response = self.session.post(url, json=data, headers=request_headers)
+                response = self.session.post(url, json=data, headers=request_headers, timeout=10)
             elif method.upper() == 'DELETE':
-                response = self.session.delete(url, headers=request_headers)
+                response = self.session.delete(url, headers=request_headers, timeout=10)
             else:
                 raise ValueError(f"Unsupported method: {method}")
                 
+            print(f"DEBUG: {method} {url} -> {response.status_code}")
             return response
         except Exception as e:
             print(f"Request failed: {e}")
