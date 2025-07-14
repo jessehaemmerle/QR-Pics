@@ -149,16 +149,18 @@ class BackendTester:
                               f"Status: {response.status_code if response else 'No response'}")
 
         # Test 4: Access protected route without token
-        temp_token = self.auth_token
-        self.auth_token = None
-        response = self.make_request('GET', '/auth/me')
-        if response and response.status_code == 403:
-            self.log_result('authentication', 'Protected route without token', True, 
-                          "Correctly rejected request without token")
-        else:
-            self.log_result('authentication', 'Protected route without token', False, 
-                          f"Expected 403, got {response.status_code if response else 'No response'}")
-        self.auth_token = temp_token
+        try:
+            response = requests.get(f"{API_BASE_URL}/auth/me", 
+                                  headers={'Content-Type': 'application/json'},
+                                  timeout=10)
+            if response and response.status_code == 403:
+                self.log_result('authentication', 'Protected route without token', True, 
+                              "Correctly rejected request without token")
+            else:
+                self.log_result('authentication', 'Protected route without token', False, 
+                              f"Expected 403, got {response.status_code if response else 'No response'}")
+        except Exception as e:
+            self.log_result('authentication', 'Protected route without token', False, f"Request error: {e}")
 
     def test_session_management(self):
         """Test session management functionality"""
