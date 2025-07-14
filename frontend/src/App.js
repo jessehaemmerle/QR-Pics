@@ -82,6 +82,132 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/admin/login" />;
 };
 
+// Photo Gallery Component
+const PhotoGallery = () => {
+  const { sessionId } = useParams();
+  const [session, setSession] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchSessionAndPhotos();
+  }, [sessionId]);
+
+  const fetchSessionAndPhotos = async () => {
+    try {
+      const [sessionResponse, photosResponse] = await Promise.all([
+        axios.get(`${API}/sessions/${sessionId}`),
+        axios.get(`${API}/photos/session/${sessionId}`)
+      ]);
+      setSession(sessionResponse.data);
+      setPhotos(photosResponse.data);
+    } catch (error) {
+      console.error('Error fetching session and photos:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadPhoto = (photo) => {
+    const link = document.createElement('a');
+    link.download = photo.filename;
+    link.href = `data:${photo.content_type};base64,${photo.image_data}`;
+    link.click();
+  };
+
+  const deletePhoto = async (photoId) => {
+    if (window.confirm('Are you sure you want to delete this photo?')) {
+      try {
+        await axios.delete(`${API}/photos/${photoId}`);
+        setPhotos(photos.filter(photo => photo.id !== photoId));
+      } catch (error) {
+        console.error('Error deleting photo:', error);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <button
+                onClick={() => navigate('/admin')}
+                className="text-blue-500 hover:text-blue-600 mb-2"
+              >
+                ← Back to Dashboard
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {session?.name || 'Photo Gallery'}
+              </h1>
+              <p className="text-gray-600">
+                {photos.length} photos uploaded
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {photos.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">No photos uploaded yet</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {photos.map((photo) => (
+              <div key={photo.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="aspect-w-16 aspect-h-12">
+                  <img
+                    src={`data:${photo.content_type};base64,${photo.image_data}`}
+                    alt={photo.filename}
+                    className="w-full h-48 object-cover"
+                  />
+                </div>
+                <div className="p-4">
+                  <h3 className="text-sm font-medium text-gray-900 truncate mb-2">
+                    {photo.filename}
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-2">
+                    {new Date(photo.uploaded_at).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    {(photo.file_size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => downloadPhoto(photo)}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Download
+                    </button>
+                    <button
+                      onClick={() => deletePhoto(photo.id)}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Home Page Component
 const Home = () => {
   const [sessions, setSessions] = useState([]);
