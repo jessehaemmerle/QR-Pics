@@ -359,6 +359,9 @@ async def upload_photo(photo_upload: PhotoUpload):
 
 @api_router.get("/photos/session/{session_id}", response_model=List[Photo])
 async def get_photos_by_session(session_id: str, current_user: User = Depends(get_current_user)):
+    # Check session access
+    await check_session_access(session_id, current_user)
+    
     photos = await db.photos.find({"session_id": session_id}).sort("uploaded_at", -1).to_list(1000)
     return [Photo(**photo) for photo in photos]
 
@@ -367,10 +370,21 @@ async def get_photo(photo_id: str, current_user: User = Depends(get_current_user
     photo = await db.photos.find_one({"id": photo_id})
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
+    
+    # Check session access for this photo
+    await check_session_access(photo["session_id"], current_user)
+    
     return Photo(**photo)
 
 @api_router.delete("/photos/{photo_id}")
 async def delete_photo(photo_id: str, current_user: User = Depends(get_current_user)):
+    photo = await db.photos.find_one({"id": photo_id})
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    # Check session access for this photo
+    await check_session_access(photo["session_id"], current_user)
+    
     result = await db.photos.delete_one({"id": photo_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Photo not found")
