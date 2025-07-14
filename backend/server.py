@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +7,15 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timedelta
+import qrcode
+import io
+import base64
+import jwt
+from passlib.context import CryptContext
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,38 +25,275 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Security
+SECRET_KEY = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
 # Create the main app without a prefix
 app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-
-# Define Models
-class StatusCheck(BaseModel):
+# Models
+class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    username: str
+    password_hash: str
+    is_superadmin: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    is_superadmin: bool = False
 
-# Add your routes to the router instead of directly to app
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class Session(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str  # user id
+    is_active: bool = True
+
+class SessionCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class Photo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    filename: str
+    content_type: str
+    image_data: str  # base64 encoded
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    file_size: int
+
+class PhotoUpload(BaseModel):
+    session_id: str
+    filename: str
+    content_type: str
+    image_data: str
+    file_size: int
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+# Utility functions
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await db.users.find_one({"username": username})
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return User(**user)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_superadmin(current_user: User = Depends(get_current_user)):
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=403, detail="Superadmin access required")
+    return current_user
+
+def generate_qr_code(data: str) -> str:
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG')
+    img_str = base64.b64encode(buffer.getvalue()).decode()
+    return img_str
+
+# Initialize superadmin on startup
+async def create_initial_superadmin():
+    existing_superadmin = await db.users.find_one({"is_superadmin": True})
+    if not existing_superadmin:
+        superadmin = User(
+            username="superadmin",
+            password_hash=get_password_hash("changeme123"),
+            is_superadmin=True
+        )
+        await db.users.insert_one(superadmin.dict())
+        logger.info("Created initial superadmin user (username: superadmin, password: changeme123)")
+
+# Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "QR Photo Upload API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
+# Auth routes
+@api_router.post("/auth/login", response_model=Token)
+async def login(user_login: UserLogin):
+    user = await db.users.find_one({"username": user_login.username})
+    if not user or not verify_password(user_login.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    access_token_expires = timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    access_token = create_access_token(
+        data={"sub": user["username"]}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+@api_router.get("/auth/me", response_model=User)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    return current_user
+
+# User management routes (superadmin only)
+@api_router.post("/users", response_model=User)
+async def create_user(user_create: UserCreate, current_user: User = Depends(get_current_superadmin)):
+    # Check if user already exists
+    existing_user = await db.users.find_one({"username": user_create.username})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    user = User(
+        username=user_create.username,
+        password_hash=get_password_hash(user_create.password),
+        is_superadmin=user_create.is_superadmin
+    )
+    await db.users.insert_one(user.dict())
+    return user
+
+@api_router.get("/users", response_model=List[User])
+async def get_users(current_user: User = Depends(get_current_superadmin)):
+    users = await db.users.find().to_list(1000)
+    return [User(**user) for user in users]
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: User = Depends(get_current_superadmin)):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully"}
+
+# Session management routes
+@api_router.post("/sessions", response_model=Session)
+async def create_session(session_create: SessionCreate, current_user: User = Depends(get_current_user)):
+    session = Session(
+        name=session_create.name,
+        description=session_create.description,
+        created_by=current_user.id
+    )
+    await db.sessions.insert_one(session.dict())
+    return session
+
+@api_router.get("/sessions", response_model=List[Session])
+async def get_sessions(current_user: User = Depends(get_current_user)):
+    sessions = await db.sessions.find({"is_active": True}).to_list(1000)
+    return [Session(**session) for session in sessions]
+
+@api_router.get("/sessions/{session_id}", response_model=Session)
+async def get_session(session_id: str, current_user: User = Depends(get_current_user)):
+    session = await db.sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return Session(**session)
+
+@api_router.get("/sessions/{session_id}/qr")
+async def get_session_qr(session_id: str, current_user: User = Depends(get_current_user)):
+    session = await db.sessions.find_one({"id": session_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Generate QR code for upload URL
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    upload_url = f"{frontend_url}/upload/{session_id}"
+    qr_code = generate_qr_code(upload_url)
+    
+    return {"qr_code": qr_code, "upload_url": upload_url}
+
+@api_router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.sessions.update_one(
+        {"id": session_id}, 
+        {"$set": {"is_active": False}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Session deactivated successfully"}
+
+# Photo upload routes
+@api_router.post("/photos", response_model=Photo)
+async def upload_photo(photo_upload: PhotoUpload):
+    # Verify session exists and is active
+    session = await db.sessions.find_one({"id": photo_upload.session_id, "is_active": True})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or inactive")
+    
+    photo = Photo(
+        session_id=photo_upload.session_id,
+        filename=photo_upload.filename,
+        content_type=photo_upload.content_type,
+        image_data=photo_upload.image_data,
+        file_size=photo_upload.file_size
+    )
+    await db.photos.insert_one(photo.dict())
+    return photo
+
+@api_router.get("/photos/session/{session_id}", response_model=List[Photo])
+async def get_photos_by_session(session_id: str, current_user: User = Depends(get_current_user)):
+    photos = await db.photos.find({"session_id": session_id}).sort("uploaded_at", -1).to_list(1000)
+    return [Photo(**photo) for photo in photos]
+
+@api_router.get("/photos/{photo_id}", response_model=Photo)
+async def get_photo(photo_id: str, current_user: User = Depends(get_current_user)):
+    photo = await db.photos.find_one({"id": photo_id})
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Photo(**photo)
+
+@api_router.delete("/photos/{photo_id}")
+async def delete_photo(photo_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.photos.delete_one({"id": photo_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return {"message": "Photo deleted successfully"}
+
+# Public route for checking session
+@api_router.get("/public/sessions/{session_id}/check")
+async def check_session_public(session_id: str):
+    session = await db.sessions.find_one({"id": session_id, "is_active": True})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or inactive")
+    return {"session_name": session["name"], "session_id": session_id}
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -69,6 +312,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def startup_event():
+    await create_initial_superadmin()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
