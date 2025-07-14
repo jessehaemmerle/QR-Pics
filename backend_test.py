@@ -112,25 +112,21 @@ class BackendTester:
                           f"Status: {response.status_code if response else 'No response'}")
 
         # Test 2: Login with wrong credentials
-        wrong_login_data = {
-            "username": "superadmin",
-            "password": "wrongpassword"
-        }
-        
-        # Use a fresh session for this test
-        fresh_session = requests.Session()
+        print("Testing invalid credentials...")
         try:
-            response = fresh_session.post(f"{API_BASE_URL}/auth/login", 
-                                        json=wrong_login_data, 
-                                        headers={'Content-Type': 'application/json'},
-                                        timeout=10)
-            if response and response.status_code == 401:
+            response = requests.post(f"{API_BASE_URL}/auth/login", 
+                                   json={"username": "superadmin", "password": "wrongpassword"},
+                                   headers={'Content-Type': 'application/json'},
+                                   timeout=10)
+            print(f"Invalid login response: {response.status_code}")
+            if response.status_code == 401:
                 self.log_result('authentication', 'Invalid credentials rejection', True, 
                               "Correctly rejected invalid credentials")
             else:
                 self.log_result('authentication', 'Invalid credentials rejection', False, 
-                              f"Expected 401, got {response.status_code if response else 'No response'}")
+                              f"Expected 401, got {response.status_code}")
         except Exception as e:
+            print(f"Exception during invalid login test: {e}")
             self.log_result('authentication', 'Invalid credentials rejection', False, f"Request error: {e}")
 
         # Test 3: Get current user info
