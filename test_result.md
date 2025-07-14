@@ -210,14 +210,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Authentication system with JWT"
-    - "Session management with QR code generation"
-    - "Photo upload with base64 storage"
     - "Authentication UI with login/logout"
     - "Session management interface"
     - "Mobile-friendly photo upload page"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
 agent_communication:
