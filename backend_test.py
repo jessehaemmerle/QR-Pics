@@ -432,13 +432,18 @@ class BackendTester:
                           f"Status: {response.status_code if response else 'No response'}")
 
         # Test 2: Check invalid session
-        response = self.make_request('GET', '/public/sessions/invalid-session-id/check', auth_required=False)
-        if response and response.status_code == 404:
-            self.log_result('public_routes', 'Check invalid session', True, 
-                          "Correctly returned 404 for invalid session")
-        else:
-            self.log_result('public_routes', 'Check invalid session', False, 
-                          f"Expected 404, got {response.status_code if response else 'No response'}")
+        try:
+            response = requests.get(f"{API_BASE_URL}/public/sessions/invalid-session-id/check",
+                                  headers={'Content-Type': 'application/json'},
+                                  timeout=10)
+            if response and response.status_code == 404:
+                self.log_result('public_routes', 'Check invalid session', True, 
+                              "Correctly returned 404 for invalid session")
+            else:
+                self.log_result('public_routes', 'Check invalid session', False, 
+                              f"Expected 404, got {response.status_code if response else 'No response'}")
+        except Exception as e:
+            self.log_result('public_routes', 'Check invalid session', False, f"Request error: {e}")
 
     def cleanup_resources(self):
         """Clean up created test resources"""
