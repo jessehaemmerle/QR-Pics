@@ -1001,6 +1001,13 @@ class BackendTester:
             self.test_session_management()
             self.test_photo_upload()
             self.test_user_management()
+            
+            # New enhanced tests for user management and session restrictions
+            self.test_enhanced_user_management()
+            self.test_user_update_endpoint()
+            self.test_session_restrictions()
+            self.test_session_access_control()
+            
             self.test_public_routes()
             
             # Print summary
