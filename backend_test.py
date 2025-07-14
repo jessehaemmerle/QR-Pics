@@ -283,13 +283,19 @@ class BackendTester:
             "file_size": 100
         }
         
-        response = self.make_request('POST', '/photos', invalid_photo_data, auth_required=False)
-        if response and response.status_code == 404:
-            self.log_result('photo_upload', 'Upload to invalid session', True, 
-                          "Correctly rejected upload to non-existent session")
-        else:
-            self.log_result('photo_upload', 'Upload to invalid session', False, 
-                          f"Expected 404, got {response.status_code if response else 'No response'}")
+        try:
+            response = requests.post(f"{API_BASE_URL}/photos", 
+                                   json=invalid_photo_data,
+                                   headers={'Content-Type': 'application/json'},
+                                   timeout=10)
+            if response and response.status_code == 404:
+                self.log_result('photo_upload', 'Upload to invalid session', True, 
+                              "Correctly rejected upload to non-existent session")
+            else:
+                self.log_result('photo_upload', 'Upload to invalid session', False, 
+                              f"Expected 404, got {response.status_code if response else 'No response'}")
+        except Exception as e:
+            self.log_result('photo_upload', 'Upload to invalid session', False, f"Request error: {e}")
 
         # Test 3: Get photos by session
         if self.auth_token:
