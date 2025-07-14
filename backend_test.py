@@ -65,7 +65,7 @@ class BackendTester:
         self.test_results[category]['details'].append(f"{status}: {test_name} - {details}")
         print(f"{status}: {test_name} - {details}")
 
-    def make_request(self, method, endpoint, data=None, headers=None, auth_required=True):
+    def make_request(self, method, endpoint, data=None, headers=None, auth_required=True, use_restricted_token=False):
         """Make HTTP request with proper headers"""
         url = f"{API_BASE_URL}{endpoint}"
         request_headers = {'Content-Type': 'application/json'}
@@ -73,14 +73,18 @@ class BackendTester:
         if headers:
             request_headers.update(headers)
             
-        if auth_required and self.auth_token:
-            request_headers['Authorization'] = f"Bearer {self.auth_token}"
+        if auth_required:
+            token = self.restricted_user_token if use_restricted_token else self.auth_token
+            if token:
+                request_headers['Authorization'] = f"Bearer {token}"
         
         try:
             if method.upper() == 'GET':
                 response = self.session.get(url, headers=request_headers, timeout=10)
             elif method.upper() == 'POST':
                 response = self.session.post(url, json=data, headers=request_headers, timeout=10)
+            elif method.upper() == 'PUT':
+                response = self.session.put(url, json=data, headers=request_headers, timeout=10)
             elif method.upper() == 'DELETE':
                 response = self.session.delete(url, headers=request_headers, timeout=10)
             else:
