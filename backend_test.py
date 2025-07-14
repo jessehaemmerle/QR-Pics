@@ -453,6 +453,476 @@ class BackendTester:
         except Exception as e:
             self.log_result('public_routes', 'Check invalid session', False, f"Request error: {e}")
 
+    def test_enhanced_user_management(self):
+        """Test enhanced user management with session restrictions"""
+        print("\n=== Testing Enhanced User Management ===")
+        
+        if not self.auth_token:
+            self.log_result('enhanced_user_management', 'Enhanced user management tests', False, "No auth token available")
+            return
+
+        # Create test sessions first
+        session1_data = {"name": "Wedding Session", "description": "Wedding photography"}
+        session2_data = {"name": "Corporate Event", "description": "Corporate photography"}
+        
+        session1_response = self.make_request('POST', '/sessions', session1_data)
+        session2_response = self.make_request('POST', '/sessions', session2_data)
+        
+        session1_id = session1_response.json()['id'] if session1_response and session1_response.status_code == 200 else None
+        session2_id = session2_response.json()['id'] if session2_response and session2_response.status_code == 200 else None
+        
+        if session1_id:
+            self.created_resources['sessions'].append(session1_id)
+        if session2_id:
+            self.created_resources['sessions'].append(session2_id)
+
+        # Test 1: Create user with session restrictions
+        if session1_id:
+            restricted_user_data = {
+                "username": f"photographer_{uuid.uuid4().hex[:8]}",
+                "password": "photographer123",
+                "is_superadmin": False,
+                "allowed_sessions": [session1_id]
+            }
+            
+            response = self.make_request('POST', '/users', restricted_user_data)
+            if response and response.status_code == 200:
+                user_response = response.json()
+                if user_response.get('allowed_sessions') == [session1_id]:
+                    self.created_resources['users'].append(user_response['id'])
+                    self.log_result('enhanced_user_management', 'Create user with session restrictions', True, 
+                                  f"User created with access to 1 session: {user_response['username']}")
+                else:
+                    self.log_result('enhanced_user_management', 'Create user with session restrictions', False, 
+                                  "Session restrictions not properly set")
+            else:
+                self.log_result('enhanced_user_management', 'Create user with session restrictions', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 2: Create additional superadmin user
+        superadmin_data = {
+            "username": f"superadmin_{uuid.uuid4().hex[:8]}",
+            "password": "superadmin123",
+            "is_superadmin": True,
+            "allowed_sessions": []
+        }
+        
+        response = self.make_request('POST', '/users', superadmin_data)
+        if response and response.status_code == 200:
+            user_response = response.json()
+            if user_response.get('is_superadmin') == True:
+                self.created_resources['users'].append(user_response['id'])
+                self.log_result('enhanced_user_management', 'Create additional superadmin', True, 
+                              f"Superadmin created: {user_response['username']}")
+            else:
+                self.log_result('enhanced_user_management', 'Create additional superadmin', False, 
+                              "Superadmin flag not properly set")
+        else:
+            self.log_result('enhanced_user_management', 'Create additional superadmin', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 3: Create user with invalid session ID
+        invalid_session_user_data = {
+            "username": f"invalid_user_{uuid.uuid4().hex[:8]}",
+            "password": "password123",
+            "is_superadmin": False,
+            "allowed_sessions": ["invalid-session-id"]
+        }
+        
+        response = self.make_request('POST', '/users', invalid_session_user_data)
+        if response and response.status_code == 400:
+            self.log_result('enhanced_user_management', 'Create user with invalid session', True, 
+                          "Correctly rejected user with invalid session ID")
+        else:
+            self.log_result('enhanced_user_management', 'Create user with invalid session', False, 
+                          f"Expected 400, got {response.status_code if response else 'No response'}")
+
+        # Test 4: List users with session restriction information
+        response = self.make_request('GET', '/users')
+        if response and response.status_code == 200:
+            users = response.json()
+            restricted_users = [u for u in users if u.get('allowed_sessions')]
+            if len(restricted_users) > 0:
+                self.log_result('enhanced_user_management', 'List users with session info', True, 
+                              f"Found {len(restricted_users)} users with session restrictions")
+            else:
+                self.log_result('enhanced_user_management', 'List users with session info', True, 
+                              "User list retrieved (no restricted users found)")
+        else:
+            self.log_result('enhanced_user_management', 'List users with session info', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+    def test_user_update_endpoint(self):
+        """Test user update endpoint functionality"""
+        print("\n=== Testing User Update Endpoint ===")
+        
+        if not self.auth_token:
+            self.log_result('user_update_endpoint', 'User update tests', False, "No auth token available")
+            return
+
+        # Create a test user first
+        test_user_data = {
+            "username": f"update_test_{uuid.uuid4().hex[:8]}",
+            "password": "original123",
+            "is_superadmin": False,
+            "allowed_sessions": []
+        }
+        
+        response = self.make_request('POST', '/users', test_user_data)
+        if not response or response.status_code != 200:
+            self.log_result('user_update_endpoint', 'User update tests', False, "Failed to create test user")
+            return
+        
+        user_id = response.json()['id']
+        self.created_resources['users'].append(user_id)
+
+        # Create test sessions for restriction updates
+        session_data = {"name": "Update Test Session", "description": "For testing updates"}
+        session_response = self.make_request('POST', '/sessions', session_data)
+        session_id = session_response.json()['id'] if session_response and session_response.status_code == 200 else None
+        if session_id:
+            self.created_resources['sessions'].append(session_id)
+
+        # Test 1: Update user session restrictions
+        if session_id:
+            update_data = {"allowed_sessions": [session_id]}
+            response = self.make_request('PUT', f'/users/{user_id}', update_data)
+            if response and response.status_code == 200:
+                updated_user = response.json()
+                if updated_user.get('allowed_sessions') == [session_id]:
+                    self.log_result('user_update_endpoint', 'Update session restrictions', True, 
+                                  "Session restrictions updated successfully")
+                else:
+                    self.log_result('user_update_endpoint', 'Update session restrictions', False, 
+                                  "Session restrictions not properly updated")
+            else:
+                self.log_result('user_update_endpoint', 'Update session restrictions', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 2: Promote user to superadmin
+        update_data = {"is_superadmin": True}
+        response = self.make_request('PUT', f'/users/{user_id}', update_data)
+        if response and response.status_code == 200:
+            updated_user = response.json()
+            if updated_user.get('is_superadmin') == True:
+                self.log_result('user_update_endpoint', 'Promote to superadmin', True, 
+                              "User promoted to superadmin successfully")
+            else:
+                self.log_result('user_update_endpoint', 'Promote to superadmin', False, 
+                              "Superadmin promotion failed")
+        else:
+            self.log_result('user_update_endpoint', 'Promote to superadmin', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 3: Update password
+        update_data = {"password": "newpassword123"}
+        response = self.make_request('PUT', f'/users/{user_id}', update_data)
+        if response and response.status_code == 200:
+            self.log_result('user_update_endpoint', 'Update password', True, 
+                          "Password updated successfully")
+        else:
+            self.log_result('user_update_endpoint', 'Update password', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 4: Update username
+        new_username = f"updated_user_{uuid.uuid4().hex[:8]}"
+        update_data = {"username": new_username}
+        response = self.make_request('PUT', f'/users/{user_id}', update_data)
+        if response and response.status_code == 200:
+            updated_user = response.json()
+            if updated_user.get('username') == new_username:
+                self.log_result('user_update_endpoint', 'Update username', True, 
+                              f"Username updated to: {new_username}")
+            else:
+                self.log_result('user_update_endpoint', 'Update username', False, 
+                              "Username not properly updated")
+        else:
+            self.log_result('user_update_endpoint', 'Update username', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 5: Update with invalid session ID
+        update_data = {"allowed_sessions": ["invalid-session-id"]}
+        response = self.make_request('PUT', f'/users/{user_id}', update_data)
+        if response and response.status_code == 400:
+            self.log_result('user_update_endpoint', 'Update with invalid session', True, 
+                          "Correctly rejected invalid session ID")
+        else:
+            self.log_result('user_update_endpoint', 'Update with invalid session', False, 
+                          f"Expected 400, got {response.status_code if response else 'No response'}")
+
+    def test_session_restrictions(self):
+        """Test session restriction functionality for restricted users"""
+        print("\n=== Testing Session Restrictions ===")
+        
+        if not self.auth_token:
+            self.log_result('session_restrictions', 'Session restriction tests', False, "No auth token available")
+            return
+
+        # Create test sessions
+        session1_data = {"name": "Allowed Session", "description": "User has access"}
+        session2_data = {"name": "Restricted Session", "description": "User has no access"}
+        
+        session1_response = self.make_request('POST', '/sessions', session1_data)
+        session2_response = self.make_request('POST', '/sessions', session2_data)
+        
+        session1_id = session1_response.json()['id'] if session1_response and session1_response.status_code == 200 else None
+        session2_id = session2_response.json()['id'] if session2_response and session2_response.status_code == 200 else None
+        
+        if session1_id:
+            self.created_resources['sessions'].append(session1_id)
+        if session2_id:
+            self.created_resources['sessions'].append(session2_id)
+
+        if not session1_id or not session2_id:
+            self.log_result('session_restrictions', 'Session restriction tests', False, "Failed to create test sessions")
+            return
+
+        # Create restricted user with access to only session1
+        restricted_user_data = {
+            "username": f"restricted_{uuid.uuid4().hex[:8]}",
+            "password": "restricted123",
+            "is_superadmin": False,
+            "allowed_sessions": [session1_id]
+        }
+        
+        response = self.make_request('POST', '/users', restricted_user_data)
+        if not response or response.status_code != 200:
+            self.log_result('session_restrictions', 'Session restriction tests', False, "Failed to create restricted user")
+            return
+        
+        restricted_user_id = response.json()['id']
+        self.created_resources['users'].append(restricted_user_id)
+
+        # Login as restricted user
+        login_data = {
+            "username": restricted_user_data['username'],
+            "password": restricted_user_data['password']
+        }
+        
+        response = self.make_request('POST', '/auth/login', login_data, auth_required=False)
+        if response and response.status_code == 200:
+            self.restricted_user_token = response.json()['access_token']
+        else:
+            self.log_result('session_restrictions', 'Session restriction tests', False, "Failed to login as restricted user")
+            return
+
+        # Test 1: Restricted user can access allowed session
+        response = self.make_request('GET', f'/sessions/{session1_id}', use_restricted_token=True)
+        if response and response.status_code == 200:
+            self.log_result('session_restrictions', 'Access allowed session', True, 
+                          "Restricted user can access allowed session")
+        else:
+            self.log_result('session_restrictions', 'Access allowed session', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 2: Restricted user cannot access restricted session
+        response = self.make_request('GET', f'/sessions/{session2_id}', use_restricted_token=True)
+        if response and response.status_code == 403:
+            self.log_result('session_restrictions', 'Access restricted session', True, 
+                          "Correctly denied access to restricted session")
+        else:
+            self.log_result('session_restrictions', 'Access restricted session', False, 
+                          f"Expected 403, got {response.status_code if response else 'No response'}")
+
+        # Test 3: Restricted user can generate QR for allowed session
+        response = self.make_request('GET', f'/sessions/{session1_id}/qr', use_restricted_token=True)
+        if response and response.status_code == 200:
+            qr_data = response.json()
+            if 'qr_code' in qr_data:
+                self.log_result('session_restrictions', 'Generate QR for allowed session', True, 
+                              "QR code generated for allowed session")
+            else:
+                self.log_result('session_restrictions', 'Generate QR for allowed session', False, 
+                              "QR response format invalid")
+        else:
+            self.log_result('session_restrictions', 'Generate QR for allowed session', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 4: Restricted user cannot generate QR for restricted session
+        response = self.make_request('GET', f'/sessions/{session2_id}/qr', use_restricted_token=True)
+        if response and response.status_code == 403:
+            self.log_result('session_restrictions', 'Generate QR for restricted session', True, 
+                          "Correctly denied QR generation for restricted session")
+        else:
+            self.log_result('session_restrictions', 'Generate QR for restricted session', False, 
+                          f"Expected 403, got {response.status_code if response else 'No response'}")
+
+        # Upload a photo to allowed session for photo access tests
+        test_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77mgAAAABJRU5ErkJggg=="
+        photo_data = {
+            "session_id": session1_id,
+            "filename": "test_restricted.png",
+            "content_type": "image/png",
+            "image_data": test_image_base64,
+            "file_size": 100
+        }
+        
+        photo_response = self.make_request('POST', '/photos', photo_data, auth_required=False)
+        photo_id = photo_response.json()['id'] if photo_response and photo_response.status_code == 200 else None
+        if photo_id:
+            self.created_resources['photos'].append(photo_id)
+
+        # Test 5: Restricted user can access photos from allowed session
+        if photo_id:
+            response = self.make_request('GET', f'/photos/session/{session1_id}', use_restricted_token=True)
+            if response and response.status_code == 200:
+                photos = response.json()
+                if len(photos) > 0:
+                    self.log_result('session_restrictions', 'Access photos from allowed session', True, 
+                                  f"Found {len(photos)} photos in allowed session")
+                else:
+                    self.log_result('session_restrictions', 'Access photos from allowed session', False, 
+                                  "No photos found in allowed session")
+            else:
+                self.log_result('session_restrictions', 'Access photos from allowed session', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 6: Restricted user cannot access photos from restricted session
+        response = self.make_request('GET', f'/photos/session/{session2_id}', use_restricted_token=True)
+        if response and response.status_code == 403:
+            self.log_result('session_restrictions', 'Access photos from restricted session', True, 
+                          "Correctly denied access to photos from restricted session")
+        else:
+            self.log_result('session_restrictions', 'Access photos from restricted session', False, 
+                          f"Expected 403, got {response.status_code if response else 'No response'}")
+
+    def test_session_access_control(self):
+        """Test session access control and filtering"""
+        print("\n=== Testing Session Access Control ===")
+        
+        if not self.auth_token:
+            self.log_result('session_access_control', 'Session access control tests', False, "No auth token available")
+            return
+
+        # Create multiple test sessions
+        session1_data = {"name": "Public Session", "description": "Available to all"}
+        session2_data = {"name": "Private Session", "description": "Restricted access"}
+        session3_data = {"name": "Another Session", "description": "Another test session"}
+        
+        session1_response = self.make_request('POST', '/sessions', session1_data)
+        session2_response = self.make_request('POST', '/sessions', session2_data)
+        session3_response = self.make_request('POST', '/sessions', session3_data)
+        
+        session1_id = session1_response.json()['id'] if session1_response and session1_response.status_code == 200 else None
+        session2_id = session2_response.json()['id'] if session2_response and session2_response.status_code == 200 else None
+        session3_id = session3_response.json()['id'] if session3_response and session3_response.status_code == 200 else None
+        
+        for session_id in [session1_id, session2_id, session3_id]:
+            if session_id:
+                self.created_resources['sessions'].append(session_id)
+
+        if not all([session1_id, session2_id, session3_id]):
+            self.log_result('session_access_control', 'Session access control tests', False, "Failed to create test sessions")
+            return
+
+        # Test 1: Superadmin can see all sessions
+        response = self.make_request('GET', '/sessions')
+        if response and response.status_code == 200:
+            sessions = response.json()
+            session_ids = [s['id'] for s in sessions]
+            if all(sid in session_ids for sid in [session1_id, session2_id, session3_id]):
+                self.log_result('session_access_control', 'Superadmin sees all sessions', True, 
+                              f"Superadmin can see all {len(sessions)} sessions")
+            else:
+                self.log_result('session_access_control', 'Superadmin sees all sessions', False, 
+                              "Superadmin cannot see all created sessions")
+        else:
+            self.log_result('session_access_control', 'Superadmin sees all sessions', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Create restricted user with access to only session1 and session2
+        restricted_user_data = {
+            "username": f"access_test_{uuid.uuid4().hex[:8]}",
+            "password": "access123",
+            "is_superadmin": False,
+            "allowed_sessions": [session1_id, session2_id]
+        }
+        
+        response = self.make_request('POST', '/users', restricted_user_data)
+        if not response or response.status_code != 200:
+            self.log_result('session_access_control', 'Session access control tests', False, "Failed to create restricted user")
+            return
+        
+        restricted_user_id = response.json()['id']
+        self.created_resources['users'].append(restricted_user_id)
+
+        # Login as restricted user
+        login_data = {
+            "username": restricted_user_data['username'],
+            "password": restricted_user_data['password']
+        }
+        
+        response = self.make_request('POST', '/auth/login', login_data, auth_required=False)
+        if response and response.status_code == 200:
+            restricted_token = response.json()['access_token']
+        else:
+            self.log_result('session_access_control', 'Session access control tests', False, "Failed to login as restricted user")
+            return
+
+        # Test 2: Restricted user sees only allowed sessions
+        self.restricted_user_token = restricted_token
+        response = self.make_request('GET', '/sessions', use_restricted_token=True)
+        if response and response.status_code == 200:
+            sessions = response.json()
+            session_ids = [s['id'] for s in sessions]
+            if session1_id in session_ids and session2_id in session_ids and session3_id not in session_ids:
+                self.log_result('session_access_control', 'Restricted user sees filtered sessions', True, 
+                              f"Restricted user sees {len(sessions)} allowed sessions")
+            else:
+                self.log_result('session_access_control', 'Restricted user sees filtered sessions', False, 
+                              f"Session filtering not working properly. Saw sessions: {session_ids}")
+        else:
+            self.log_result('session_access_control', 'Restricted user sees filtered sessions', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 3: Restricted user cannot access unauthorized session
+        response = self.make_request('GET', f'/sessions/{session3_id}', use_restricted_token=True)
+        if response and response.status_code == 403:
+            self.log_result('session_access_control', 'Deny unauthorized session access', True, 
+                          "Correctly denied access to unauthorized session")
+        else:
+            self.log_result('session_access_control', 'Deny unauthorized session access', False, 
+                          f"Expected 403, got {response.status_code if response else 'No response'}")
+
+        # Create unrestricted user (empty allowed_sessions means access to all)
+        unrestricted_user_data = {
+            "username": f"unrestricted_{uuid.uuid4().hex[:8]}",
+            "password": "unrestricted123",
+            "is_superadmin": False,
+            "allowed_sessions": []
+        }
+        
+        response = self.make_request('POST', '/users', unrestricted_user_data)
+        if response and response.status_code == 200:
+            unrestricted_user_id = response.json()['id']
+            self.created_resources['users'].append(unrestricted_user_id)
+
+            # Login as unrestricted user
+            login_data = {
+                "username": unrestricted_user_data['username'],
+                "password": unrestricted_user_data['password']
+            }
+            
+            response = self.make_request('POST', '/auth/login', login_data, auth_required=False)
+            if response and response.status_code == 200:
+                unrestricted_token = response.json()['access_token']
+
+                # Test 4: Unrestricted user (empty allowed_sessions) sees all sessions
+                headers = {'Authorization': f'Bearer {unrestricted_token}'}
+                response = self.make_request('GET', '/sessions', headers=headers, auth_required=False)
+                if response and response.status_code == 200:
+                    sessions = response.json()
+                    session_ids = [s['id'] for s in sessions]
+                    if all(sid in session_ids for sid in [session1_id, session2_id, session3_id]):
+                        self.log_result('session_access_control', 'Unrestricted user sees all sessions', True, 
+                                      f"Unrestricted user can see all {len(sessions)} sessions")
+                    else:
+                        self.log_result('session_access_control', 'Unrestricted user sees all sessions', False, 
+                                      "Unrestricted user cannot see all sessions")
+                else:
+                    self.log_result('session_access_control', 'Unrestricted user sees all sessions', False, 
+                                  f"Status: {response.status_code if response else 'No response'}")
+
     def cleanup_resources(self):
         """Clean up created test resources"""
         print("\n=== Cleaning up test resources ===")
