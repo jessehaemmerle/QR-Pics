@@ -1065,6 +1065,11 @@ function App() {
           <Routes>
             <Route path="/upload/:sessionId" element={<UploadPage />} />
             <Route path="/admin/login" element={<LoginPage />} />
+            <Route path="/admin/users" element={
+              <ProtectedRoute>
+                <UserManagement />
+              </ProtectedRoute>
+            } />
             <Route path="/admin/photos/:sessionId" element={
               <ProtectedRoute>
                 <PhotoGallery />
