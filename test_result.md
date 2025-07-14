@@ -218,11 +218,9 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
+  current_focus: []
+  stuck_tasks:
     - "Authentication UI with login/logout"
-    - "Session management interface"
-    - "Mobile-friendly photo upload page"
-  stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
