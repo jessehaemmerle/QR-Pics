@@ -205,10 +205,19 @@ async def create_user(user_create: UserCreate, current_user: User = Depends(get_
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     
+    # Validate session access if allowed_sessions is specified
+    if user_create.allowed_sessions:
+        for session_id in user_create.allowed_sessions:
+            session = await db.sessions.find_one({"id": session_id})
+            if not session:
+                raise HTTPException(status_code=400, detail=f"Session {session_id} not found")
+    
     user = User(
         username=user_create.username,
         password_hash=get_password_hash(user_create.password),
-        is_superadmin=user_create.is_superadmin
+        is_superadmin=user_create.is_superadmin,
+        allowed_sessions=user_create.allowed_sessions,
+        created_by=current_user.id
     )
     await db.users.insert_one(user.dict())
     return user
@@ -217,6 +226,44 @@ async def create_user(user_create: UserCreate, current_user: User = Depends(get_
 async def get_users(current_user: User = Depends(get_current_superadmin)):
     users = await db.users.find().to_list(1000)
     return [User(**user) for user in users]
+
+@api_router.put("/users/{user_id}", response_model=User)
+async def update_user(user_id: str, user_update: UserUpdate, current_user: User = Depends(get_current_superadmin)):
+    existing_user = await db.users.find_one({"id": user_id})
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prepare update data
+    update_data = {}
+    if user_update.username is not None:
+        # Check if username already exists
+        if user_update.username != existing_user["username"]:
+            existing_username = await db.users.find_one({"username": user_update.username})
+            if existing_username:
+                raise HTTPException(status_code=400, detail="Username already exists")
+        update_data["username"] = user_update.username
+    
+    if user_update.password is not None:
+        update_data["password_hash"] = get_password_hash(user_update.password)
+    
+    if user_update.is_superadmin is not None:
+        update_data["is_superadmin"] = user_update.is_superadmin
+    
+    if user_update.allowed_sessions is not None:
+        # Validate session access if allowed_sessions is specified
+        if user_update.allowed_sessions:
+            for session_id in user_update.allowed_sessions:
+                session = await db.sessions.find_one({"id": session_id})
+                if not session:
+                    raise HTTPException(status_code=400, detail=f"Session {session_id} not found")
+        update_data["allowed_sessions"] = user_update.allowed_sessions
+    
+    # Update user
+    await db.users.update_one({"id": user_id}, {"$set": update_data})
+    
+    # Return updated user
+    updated_user = await db.users.find_one({"id": user_id})
+    return User(**updated_user)
 
 @api_router.delete("/users/{user_id}")
 async def delete_user(user_id: str, current_user: User = Depends(get_current_superadmin)):
