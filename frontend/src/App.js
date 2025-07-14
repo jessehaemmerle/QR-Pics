@@ -670,6 +670,14 @@ const Home = () => {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Welcome, {user.username}</span>
+              {user.is_superadmin && (
+                <button
+                  onClick={() => navigate('/admin/users')}
+                  className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md"
+                >
+                  Manage Users
+                </button>
+              )}
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
