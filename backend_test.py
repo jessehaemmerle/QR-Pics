@@ -35,11 +35,16 @@ class BackendTester:
     def __init__(self):
         self.session = requests.Session()
         self.auth_token = None
+        self.restricted_user_token = None
         self.test_results = {
             'authentication': {'passed': 0, 'failed': 0, 'details': []},
             'session_management': {'passed': 0, 'failed': 0, 'details': []},
             'photo_upload': {'passed': 0, 'failed': 0, 'details': []},
             'user_management': {'passed': 0, 'failed': 0, 'details': []},
+            'enhanced_user_management': {'passed': 0, 'failed': 0, 'details': []},
+            'session_restrictions': {'passed': 0, 'failed': 0, 'details': []},
+            'user_update_endpoint': {'passed': 0, 'failed': 0, 'details': []},
+            'session_access_control': {'passed': 0, 'failed': 0, 'details': []},
             'public_routes': {'passed': 0, 'failed': 0, 'details': []}
         }
         self.created_resources = {
