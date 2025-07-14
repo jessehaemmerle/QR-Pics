@@ -168,7 +168,9 @@ async def create_initial_superadmin():
         superadmin = User(
             username="superadmin",
             password_hash=get_password_hash("changeme123"),
-            is_superadmin=True
+            is_superadmin=True,
+            allowed_sessions=[],  # Superadmin has access to all sessions
+            created_by="system"
         )
         await db.users.insert_one(superadmin.dict())
         logger.info("Created initial superadmin user (username: superadmin, password: changeme123)")
