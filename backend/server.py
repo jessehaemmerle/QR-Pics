@@ -45,12 +45,21 @@ class User(BaseModel):
     username: str
     password_hash: str
     is_superadmin: bool = False
+    allowed_sessions: List[str] = []  # Empty list means access to all sessions
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str = ""  # ID of user who created this user
 
 class UserCreate(BaseModel):
     username: str
     password: str
     is_superadmin: bool = False
+    allowed_sessions: List[str] = []
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    is_superadmin: Optional[bool] = None
+    allowed_sessions: Optional[List[str]] = None
 
 class UserLogin(BaseModel):
     username: str
