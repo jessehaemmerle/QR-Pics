@@ -288,11 +288,23 @@ async def create_session(session_create: SessionCreate, current_user: User = Dep
 
 @api_router.get("/sessions", response_model=List[Session])
 async def get_sessions(current_user: User = Depends(get_current_user)):
-    sessions = await db.sessions.find({"is_active": True}).to_list(1000)
+    # If user is superadmin or has no session restrictions, return all sessions
+    if current_user.is_superadmin or not current_user.allowed_sessions:
+        sessions = await db.sessions.find({"is_active": True}).to_list(1000)
+    else:
+        # Return only sessions the user has access to
+        sessions = await db.sessions.find({
+            "id": {"$in": current_user.allowed_sessions},
+            "is_active": True
+        }).to_list(1000)
+    
     return [Session(**session) for session in sessions]
 
 @api_router.get("/sessions/{session_id}", response_model=Session)
 async def get_session(session_id: str, current_user: User = Depends(get_current_user)):
+    # Check session access
+    await check_session_access(session_id, current_user)
+    
     session = await db.sessions.find_one({"id": session_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -300,6 +312,9 @@ async def get_session(session_id: str, current_user: User = Depends(get_current_
 
 @api_router.get("/sessions/{session_id}/qr")
 async def get_session_qr(session_id: str, current_user: User = Depends(get_current_user)):
+    # Check session access
+    await check_session_access(session_id, current_user)
+    
     session = await db.sessions.find_one({"id": session_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -313,6 +328,9 @@ async def get_session_qr(session_id: str, current_user: User = Depends(get_curre
 
 @api_router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str, current_user: User = Depends(get_current_user)):
+    # Check session access
+    await check_session_access(session_id, current_user)
+    
     result = await db.sessions.update_one(
         {"id": session_id}, 
         {"$set": {"is_active": False}}
