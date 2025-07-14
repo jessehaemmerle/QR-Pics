@@ -208,6 +208,396 @@ const PhotoGallery = () => {
   );
 };
 
+// User Management Component
+const UserManagement = () => {
+  const [users, setUsers] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [newUser, setNewUser] = useState({
+    username: '',
+    password: '',
+    is_superadmin: false,
+    allowed_sessions: []
+  });
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchUsers();
+    fetchSessions();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get(`${API}/users`);
+      setUsers(response.data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSessions = async () => {
+    try {
+      const response = await axios.get(`${API}/sessions`);
+      setSessions(response.data);
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+    }
+  };
+
+  const createUser = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/users`, newUser);
+      setNewUser({
+        username: '',
+        password: '',
+        is_superadmin: false,
+        allowed_sessions: []
+      });
+      setShowCreateForm(false);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Error creating user: ' + (error.response?.data?.detail || 'Unknown error'));
+    }
+  };
+
+  const updateUser = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/users/${editingUser.id}`, editingUser);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Error updating user: ' + (error.response?.data?.detail || 'Unknown error'));
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        await axios.delete(`${API}/users/${userId}`);
+        fetchUsers();
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        alert('Error deleting user: ' + (error.response?.data?.detail || 'Unknown error'));
+      }
+    }
+  };
+
+  const handleSessionToggle = (sessionId, isForNewUser = false) => {
+    if (isForNewUser) {
+      setNewUser(prev => ({
+        ...prev,
+        allowed_sessions: prev.allowed_sessions.includes(sessionId)
+          ? prev.allowed_sessions.filter(id => id !== sessionId)
+          : [...prev.allowed_sessions, sessionId]
+      }));
+    } else {
+      setEditingUser(prev => ({
+        ...prev,
+        allowed_sessions: prev.allowed_sessions.includes(sessionId)
+          ? prev.allowed_sessions.filter(id => id !== sessionId)
+          : [...prev.allowed_sessions, sessionId]
+      }));
+    }
+  };
+
+  const getSessionName = (sessionId) => {
+    const session = sessions.find(s => s.id === sessionId);
+    return session ? session.name : 'Unknown Session';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div>
+              <button
+                onClick={() => navigate('/admin')}
+                className="text-blue-500 hover:text-blue-600 mb-2"
+              >
+                ← Back to Dashboard
+              </button>
+              <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+            </div>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
+            >
+              Add User
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Create User Form */}
+        {showCreateForm && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Create New User</h2>
+            <form onSubmit={createUser} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Username</label>
+                  <input
+                    type="text"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Password</label>
+                  <input
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={newUser.is_superadmin}
+                    onChange={(e) => setNewUser({...newUser, is_superadmin: e.target.checked})}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Superadmin</span>
+                </label>
+              </div>
+
+              {!newUser.is_superadmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Session Access (Leave empty for all sessions)
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {sessions.map((session) => (
+                      <label key={session.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={newUser.allowed_sessions.includes(session.id)}
+                          onChange={() => handleSessionToggle(session.id, true)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">{session.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-4">
+                <button
+                  type="submit"
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
+                >
+                  Create User
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Edit User Form */}
+        {editingUser && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Edit User</h2>
+            <form onSubmit={updateUser} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Username</label>
+                  <input
+                    type="text"
+                    value={editingUser.username}
+                    onChange={(e) => setEditingUser({...editingUser, username: e.target.value})}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">New Password (optional)</label>
+                  <input
+                    type="password"
+                    value={editingUser.password || ''}
+                    onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={editingUser.is_superadmin}
+                    onChange={(e) => setEditingUser({...editingUser, is_superadmin: e.target.checked})}
+                    className="mr-2"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Superadmin</span>
+                </label>
+              </div>
+
+              {!editingUser.is_superadmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Session Access (Leave empty for all sessions)
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {sessions.map((session) => (
+                      <label key={session.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={editingUser.allowed_sessions.includes(session.id)}
+                          onChange={() => handleSessionToggle(session.id, false)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm text-gray-700">{session.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-4">
+                <button
+                  type="submit"
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
+                >
+                  Update User
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Users List */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Users ({users.length})</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Username
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Session Access
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.map((user) => (
+                  <tr key={user.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        user.is_superadmin 
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {user.is_superadmin ? 'Superadmin' : 'User'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {user.is_superadmin ? (
+                          <span className="text-blue-600">All Sessions</span>
+                        ) : user.allowed_sessions.length === 0 ? (
+                          <span className="text-blue-600">All Sessions</span>
+                        ) : (
+                          <div className="space-y-1">
+                            {user.allowed_sessions.slice(0, 3).map(sessionId => (
+                              <div key={sessionId} className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                {getSessionName(sessionId)}
+                              </div>
+                            ))}
+                            {user.allowed_sessions.length > 3 && (
+                              <div className="text-xs text-gray-500">
+                                +{user.allowed_sessions.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => setEditingUser(user)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => deleteUser(user.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Home Page Component
 const Home = () => {
   const [sessions, setSessions] = useState([]);
