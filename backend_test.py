@@ -365,13 +365,22 @@ class BackendTester:
             "is_superadmin": False
         }
         
-        response = self.make_request('POST', '/users', duplicate_user_data)
-        if response and response.status_code == 400:
-            self.log_result('user_management', 'Duplicate username rejection', True, 
-                          "Correctly rejected duplicate username")
-        else:
-            self.log_result('user_management', 'Duplicate username rejection', False, 
-                          f"Expected 400, got {response.status_code if response else 'No response'}")
+        try:
+            response = requests.post(f"{API_BASE_URL}/users", 
+                                   json=duplicate_user_data,
+                                   headers={
+                                       'Content-Type': 'application/json',
+                                       'Authorization': f'Bearer {self.auth_token}'
+                                   },
+                                   timeout=10)
+            if response and response.status_code == 400:
+                self.log_result('user_management', 'Duplicate username rejection', True, 
+                              "Correctly rejected duplicate username")
+            else:
+                self.log_result('user_management', 'Duplicate username rejection', False, 
+                              f"Expected 400, got {response.status_code if response else 'No response'}")
+        except Exception as e:
+            self.log_result('user_management', 'Duplicate username rejection', False, f"Request error: {e}")
 
         # Test 3: List all users
         response = self.make_request('GET', '/users')
