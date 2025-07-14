@@ -89,6 +89,7 @@ const Home = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [qrCodes, setQrCodes] = useState({});
   const { user } = useAuth();
+  const { logout } = useAuth();
 
   useEffect(() => {
     if (user) {
