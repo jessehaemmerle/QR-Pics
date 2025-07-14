@@ -159,6 +159,12 @@ const Home = () => {
               >
                 New Session
               </button>
+              <button
+                onClick={() => logout()}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
