@@ -132,6 +132,19 @@ async def get_current_superadmin(current_user: User = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Superadmin access required")
     return current_user
 
+async def check_session_access(session_id: str, current_user: User = Depends(get_current_user)):
+    """Check if user has access to a specific session"""
+    if current_user.is_superadmin:
+        return True  # Superadmins have access to all sessions
+    
+    if not current_user.allowed_sessions:
+        return True  # Empty list means access to all sessions
+    
+    if session_id not in current_user.allowed_sessions:
+        raise HTTPException(status_code=403, detail="Access denied to this session")
+    
+    return True
+
 def generate_qr_code(data: str) -> str:
     qr = qrcode.QRCode(
         version=1,
