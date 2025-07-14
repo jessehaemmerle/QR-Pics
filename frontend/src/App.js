@@ -88,8 +88,7 @@ const Home = () => {
   const [newSession, setNewSession] = useState({ name: '', description: '' });
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [qrCodes, setQrCodes] = useState({});
-  const { user } = useAuth();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     if (user) {
