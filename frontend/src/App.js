@@ -377,7 +377,7 @@ const Home = () => {
                 
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => window.open(`/admin/photos/${session.id}`, '_blank')}
+                    onClick={() => navigate(`/admin/photos/${session.id}`)}
                     className="flex-1 bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-md text-sm"
                   >
                     View Photos
