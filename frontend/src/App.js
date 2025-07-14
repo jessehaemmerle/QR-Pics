@@ -215,6 +215,7 @@ const Home = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [qrCodes, setQrCodes] = useState({});
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
