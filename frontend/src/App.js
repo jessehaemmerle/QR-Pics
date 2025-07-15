@@ -87,7 +87,9 @@ const PhotoGallery = () => {
   const { sessionId } = useParams();
   const [session, setSession] = useState(null);
   const [photos, setPhotos] = useState([]);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -116,11 +118,74 @@ const PhotoGallery = () => {
     link.click();
   };
 
+  const handleBulkDownload = async () => {
+    if (selectedPhotos.length === 0) {
+      alert('Please select photos to download');
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      const response = await axios.post(`${API}/photos/bulk-download`, selectedPhotos, {
+        responseType: 'blob',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from response header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'photos.zip';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Clear selection after download
+      setSelectedPhotos([]);
+    } catch (error) {
+      console.error('Error downloading photos:', error);
+      alert('Error downloading photos. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedPhotos.length === photos.length) {
+      setSelectedPhotos([]);
+    } else {
+      setSelectedPhotos(photos.map(photo => photo.id));
+    }
+  };
+
+  const handlePhotoSelect = (photoId) => {
+    setSelectedPhotos(prev => 
+      prev.includes(photoId) 
+        ? prev.filter(id => id !== photoId)
+        : [...prev, photoId]
+    );
+  };
+
   const deletePhoto = async (photoId) => {
     if (window.confirm('Are you sure you want to delete this photo?')) {
       try {
         await axios.delete(`${API}/photos/${photoId}`);
         setPhotos(photos.filter(photo => photo.id !== photoId));
+        setSelectedPhotos(selectedPhotos.filter(id => id !== photoId));
       } catch (error) {
         console.error('Error deleting photo:', error);
       }
@@ -154,6 +219,31 @@ const PhotoGallery = () => {
                 {photos.length} photos uploaded
               </p>
             </div>
+            
+            {photos.length > 0 && (
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-gray-600">
+                  {selectedPhotos.length} selected
+                </div>
+                <button
+                  onClick={handleSelectAll}
+                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
+                >
+                  {selectedPhotos.length === photos.length ? 'Deselect All' : 'Select All'}
+                </button>
+                <button
+                  onClick={handleBulkDownload}
+                  disabled={selectedPhotos.length === 0 || downloading}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${
+                    selectedPhotos.length === 0 || downloading
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-500 hover:bg-green-600 text-white'
+                  }`}
+                >
+                  {downloading ? 'Downloading...' : `Download Selected (${selectedPhotos.length})`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -166,7 +256,17 @@ const PhotoGallery = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {photos.map((photo) => (
-              <div key={photo.id} className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div key={photo.id} className="bg-white rounded-lg shadow-lg overflow-hidden relative">
+                {/* Selection checkbox */}
+                <div className="absolute top-2 left-2 z-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedPhotos.includes(photo.id)}
+                    onChange={() => handlePhotoSelect(photo.id)}
+                    className="w-5 h-5 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </div>
+                
                 <div className="aspect-w-16 aspect-h-12">
                   <img
                     src={`data:${photo.content_type};base64,${photo.image_data}`}
