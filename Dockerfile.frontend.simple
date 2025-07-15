@@ -1,0 +1,35 @@
+# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package.json frontend/yarn.lock* ./
+
+# Install dependencies
+RUN yarn install
+
+# Copy source code
+COPY frontend/ .
+
+# Build the application
+RUN yarn build
+
+# Production stage
+FROM nginx:alpine
+
+# Copy built application
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Copy simple nginx configuration
+COPY nginx.simple.conf /etc/nginx/nginx.conf
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
+
+# Run nginx
+CMD ["nginx", "-g", "daemon off;"]
