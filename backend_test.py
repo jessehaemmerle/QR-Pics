@@ -924,6 +924,194 @@ class BackendTester:
                     self.log_result('session_access_control', 'Unrestricted user sees all sessions', False, 
                                   f"Status: {response.status_code if response else 'No response'}")
 
+    def test_bulk_download(self):
+        """Test bulk download functionality"""
+        print("\n=== Testing Bulk Download Functionality ===")
+        
+        if not self.auth_token:
+            self.log_result('bulk_download', 'Bulk download tests', False, "No auth token available")
+            return
+
+        # Create test sessions and photos for bulk download
+        session1_data = {"name": "Bulk Test Session 1", "description": "For bulk download testing"}
+        session2_data = {"name": "Bulk Test Session 2", "description": "For bulk download testing"}
+        
+        session1_response = self.make_request('POST', '/sessions', session1_data)
+        session2_response = self.make_request('POST', '/sessions', session2_data)
+        
+        session1_id = session1_response.json()['id'] if session1_response and session1_response.status_code == 200 else None
+        session2_id = session2_response.json()['id'] if session2_response and session2_response.status_code == 200 else None
+        
+        if session1_id:
+            self.created_resources['sessions'].append(session1_id)
+        if session2_id:
+            self.created_resources['sessions'].append(session2_id)
+
+        if not session1_id or not session2_id:
+            self.log_result('bulk_download', 'Bulk download tests', False, "Failed to create test sessions")
+            return
+
+        # Create test images (different base64 encoded images)
+        test_image1_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77mgAAAABJRU5ErkJggg=="
+        test_image2_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mNkYGBgYGBgYGBgYGBgYAAABQABDQottAAAAABJRU5ErkJggg=="
+        test_image3_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAMAAAADCAYAAABWKLW/AAAAHklEQVR42mNkYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAAEAABAKKxjxsAAAAASUVORK5CYII="
+
+        # Upload photos to session1
+        photo_data_list = [
+            {
+                "session_id": session1_id,
+                "filename": "bulk_test1.png",
+                "content_type": "image/png",
+                "image_data": test_image1_base64,
+                "file_size": 100
+            },
+            {
+                "session_id": session1_id,
+                "filename": "bulk_test2.png",
+                "content_type": "image/png",
+                "image_data": test_image2_base64,
+                "file_size": 120
+            },
+            {
+                "session_id": session2_id,
+                "filename": "bulk_test3.png",
+                "content_type": "image/png",
+                "image_data": test_image3_base64,
+                "file_size": 140
+            }
+        ]
+
+        uploaded_photo_ids = []
+        for photo_data in photo_data_list:
+            response = self.make_request('POST', '/photos', photo_data, auth_required=False)
+            if response and response.status_code == 200:
+                photo_id = response.json()['id']
+                uploaded_photo_ids.append(photo_id)
+                self.created_resources['photos'].append(photo_id)
+
+        if len(uploaded_photo_ids) < 3:
+            self.log_result('bulk_download', 'Bulk download tests', False, "Failed to upload test photos")
+            return
+
+        # Test 1: Bulk download with valid photo IDs
+        bulk_request_data = uploaded_photo_ids
+        response = self.make_request('POST', '/photos/bulk-download', bulk_request_data)
+        if response and response.status_code == 200:
+            # Check if response is a ZIP file
+            content_type = response.headers.get('content-type', '')
+            content_disposition = response.headers.get('content-disposition', '')
+            
+            if 'application/zip' in content_type and 'attachment' in content_disposition:
+                # Check if we got actual ZIP content
+                content_length = len(response.content)
+                if content_length > 100:  # ZIP files should be larger than 100 bytes
+                    self.log_result('bulk_download', 'Bulk download valid photos', True, 
+                                  f"ZIP file created successfully ({content_length} bytes)")
+                else:
+                    self.log_result('bulk_download', 'Bulk download valid photos', False, 
+                                  f"ZIP file too small ({content_length} bytes)")
+            else:
+                self.log_result('bulk_download', 'Bulk download valid photos', False, 
+                              f"Invalid response format. Content-Type: {content_type}")
+        else:
+            self.log_result('bulk_download', 'Bulk download valid photos', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 2: Bulk download with empty photo ID list
+        response = self.make_request('POST', '/photos/bulk-download', [])
+        if response and response.status_code == 400:
+            self.log_result('bulk_download', 'Bulk download empty list', True, 
+                          "Correctly rejected empty photo ID list")
+        else:
+            self.log_result('bulk_download', 'Bulk download empty list', False, 
+                          f"Expected 400, got {response.status_code if response else 'No response'}")
+
+        # Test 3: Bulk download with invalid photo IDs
+        invalid_photo_ids = ["invalid-id-1", "invalid-id-2"]
+        response = self.make_request('POST', '/photos/bulk-download', invalid_photo_ids)
+        if response and response.status_code == 404:
+            self.log_result('bulk_download', 'Bulk download invalid IDs', True, 
+                          "Correctly returned 404 for invalid photo IDs")
+        else:
+            self.log_result('bulk_download', 'Bulk download invalid IDs', False, 
+                          f"Expected 404, got {response.status_code if response else 'No response'}")
+
+        # Test 4: Bulk download with mixed valid/invalid photo IDs
+        mixed_photo_ids = [uploaded_photo_ids[0], "invalid-id", uploaded_photo_ids[1]]
+        response = self.make_request('POST', '/photos/bulk-download', mixed_photo_ids)
+        if response and response.status_code == 200:
+            # Should succeed with valid photos only
+            content_type = response.headers.get('content-type', '')
+            if 'application/zip' in content_type:
+                self.log_result('bulk_download', 'Bulk download mixed IDs', True, 
+                              "Successfully created ZIP with valid photos only")
+            else:
+                self.log_result('bulk_download', 'Bulk download mixed IDs', False, 
+                              "Invalid response format for mixed IDs")
+        else:
+            self.log_result('bulk_download', 'Bulk download mixed IDs', False, 
+                          f"Status: {response.status_code if response else 'No response'}")
+
+        # Test 5: Test session access control for bulk download
+        # Create a restricted user with access to only session1
+        restricted_user_data = {
+            "username": f"bulk_restricted_{uuid.uuid4().hex[:8]}",
+            "password": "bulkrestricted123",
+            "is_superadmin": False,
+            "allowed_sessions": [session1_id]
+        }
+        
+        response = self.make_request('POST', '/users', restricted_user_data)
+        if response and response.status_code == 200:
+            restricted_user_id = response.json()['id']
+            self.created_resources['users'].append(restricted_user_id)
+
+            # Login as restricted user
+            login_data = {
+                "username": restricted_user_data['username'],
+                "password": restricted_user_data['password']
+            }
+            
+            response = self.make_request('POST', '/auth/login', login_data, auth_required=False)
+            if response and response.status_code == 200:
+                restricted_token = response.json()['access_token']
+
+                # Try to bulk download photos from both sessions (should only get session1 photos)
+                self.restricted_user_token = restricted_token
+                response = self.make_request('POST', '/photos/bulk-download', uploaded_photo_ids, use_restricted_token=True)
+                if response and response.status_code == 200:
+                    content_type = response.headers.get('content-type', '')
+                    if 'application/zip' in content_type:
+                        self.log_result('bulk_download', 'Bulk download session restrictions', True, 
+                                      "Restricted user can bulk download accessible photos only")
+                    else:
+                        self.log_result('bulk_download', 'Bulk download session restrictions', False, 
+                                      "Invalid response format for restricted user")
+                else:
+                    self.log_result('bulk_download', 'Bulk download session restrictions', False, 
+                                  f"Status: {response.status_code if response else 'No response'}")
+            else:
+                self.log_result('bulk_download', 'Bulk download session restrictions', False, 
+                              "Failed to login as restricted user")
+        else:
+            self.log_result('bulk_download', 'Bulk download session restrictions', False, 
+                          "Failed to create restricted user")
+
+        # Test 6: Test bulk download without authentication
+        try:
+            response = requests.post(f"{API_BASE_URL}/photos/bulk-download", 
+                                   json=uploaded_photo_ids,
+                                   headers={'Content-Type': 'application/json'},
+                                   timeout=10)
+            if response and response.status_code == 403:
+                self.log_result('bulk_download', 'Bulk download without auth', True, 
+                              "Correctly rejected bulk download without authentication")
+            else:
+                self.log_result('bulk_download', 'Bulk download without auth', False, 
+                              f"Expected 403, got {response.status_code if response else 'No response'}")
+        except Exception as e:
+            self.log_result('bulk_download', 'Bulk download without auth', False, f"Request error: {e}")
+
     def cleanup_resources(self):
         """Clean up created test resources"""
         print("\n=== Cleaning up test resources ===")
