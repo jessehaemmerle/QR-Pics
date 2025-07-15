@@ -441,7 +441,15 @@ async def bulk_download_photos(photo_ids: List[str], current_user: User = Depend
                         
                         # Add timestamp to filename to avoid conflicts
                         name, ext = safe_filename.rsplit('.', 1)
-                        timestamp = photo.get("uploaded_at", "").replace(":", "-").replace(".", "-")[:19]  # Remove microseconds
+                        uploaded_at = photo.get("uploaded_at", "")
+                        if uploaded_at:
+                            # Convert datetime to string if needed
+                            if hasattr(uploaded_at, 'strftime'):
+                                timestamp = uploaded_at.strftime("%Y%m%d_%H%M%S")
+                            else:
+                                timestamp = str(uploaded_at).replace(":", "-").replace(".", "-")[:19]
+                        else:
+                            timestamp = "unknown"
                         unique_filename = f"{name}_{timestamp}.{ext}"
                         
                         zip_file.writestr(unique_filename, image_data)
