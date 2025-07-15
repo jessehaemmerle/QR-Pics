@@ -45,6 +45,7 @@ class BackendTester:
             'session_restrictions': {'passed': 0, 'failed': 0, 'details': []},
             'user_update_endpoint': {'passed': 0, 'failed': 0, 'details': []},
             'session_access_control': {'passed': 0, 'failed': 0, 'details': []},
+            'bulk_download': {'passed': 0, 'failed': 0, 'details': []},
             'public_routes': {'passed': 0, 'failed': 0, 'details': []}
         }
         self.created_resources = {
