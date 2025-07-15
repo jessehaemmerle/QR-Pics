@@ -393,6 +393,91 @@ async def delete_photo(photo_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Photo not found")
     return {"message": "Photo deleted successfully"}
 
+@api_router.post("/photos/bulk-download")
+async def bulk_download_photos(photo_ids: List[str], current_user: User = Depends(get_current_user)):
+    """Download multiple photos as a ZIP file"""
+    if not photo_ids:
+        raise HTTPException(status_code=400, detail="No photo IDs provided")
+    
+    # Fetch all photos and validate access
+    photos = []
+    for photo_id in photo_ids:
+        photo = await db.photos.find_one({"id": photo_id})
+        if not photo:
+            continue  # Skip missing photos
+        
+        # Check session access for this photo
+        try:
+            await check_session_access(photo["session_id"], current_user)
+            photos.append(photo)
+        except HTTPException:
+            continue  # Skip photos user doesn't have access to
+    
+    if not photos:
+        raise HTTPException(status_code=404, detail="No accessible photos found")
+    
+    # Create a temporary ZIP file
+    def create_zip():
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            with zipfile.ZipFile(tmp_file.name, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for photo in photos:
+                    try:
+                        # Decode base64 image data
+                        image_data = base64.b64decode(photo["image_data"])
+                        
+                        # Create a safe filename
+                        safe_filename = photo["filename"]
+                        if not safe_filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
+                            # Try to determine extension from content type
+                            content_type = photo.get("content_type", "")
+                            if "jpeg" in content_type or "jpg" in content_type:
+                                safe_filename += ".jpg"
+                            elif "png" in content_type:
+                                safe_filename += ".png"
+                            elif "gif" in content_type:
+                                safe_filename += ".gif"
+                            else:
+                                safe_filename += ".jpg"  # Default to jpg
+                        
+                        # Add timestamp to filename to avoid conflicts
+                        name, ext = safe_filename.rsplit('.', 1)
+                        timestamp = photo.get("uploaded_at", "").replace(":", "-").replace(".", "-")[:19]  # Remove microseconds
+                        unique_filename = f"{name}_{timestamp}.{ext}"
+                        
+                        zip_file.writestr(unique_filename, image_data)
+                    except Exception as e:
+                        logger.error(f"Error adding photo {photo['id']} to ZIP: {e}")
+                        continue
+            
+            return tmp_file.name
+    
+    # Generate ZIP file
+    zip_filename = create_zip()
+    
+    # Stream the ZIP file
+    def iterfile():
+        with open(zip_filename, 'rb') as file_like:
+            yield from file_like
+        # Clean up temporary file
+        os.unlink(zip_filename)
+    
+    # Get session name for ZIP filename
+    session_name = "photos"
+    if photos:
+        session = await db.sessions.find_one({"id": photos[0]["session_id"]})
+        if session:
+            session_name = session["name"].replace(" ", "_").replace("/", "_")
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="{session_name}_photos.zip"'
+    }
+    
+    return StreamingResponse(
+        iterfile(),
+        media_type='application/zip',
+        headers=headers
+    )
+
 # Public route for checking session
 @api_router.get("/public/sessions/{session_id}/check")
 async def check_session_public(session_id: str):
