@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Local deployment script for QR Photo Upload
-echo "🚀 Starting QR Photo Upload LOCAL deployment..."
+# Local deployment script for QR Photo Upload on server IP: 81.173.84.37
+echo "🚀 Starting QR Photo Upload deployment on server 81.173.84.37..."
 
 # Check if Docker is available
 if ! command -v docker &> /dev/null; then
@@ -43,7 +43,7 @@ $DOCKER_COMPOSE -f docker-compose.local.yml ps
 
 # Test backend API
 echo "🧪 Testing backend API..."
-if curl -f http://localhost:8001/api/ > /dev/null 2>&1; then
+if curl -f http://81.173.84.37:8001/api/ > /dev/null 2>&1; then
     echo "✅ Backend API is responding"
 else
     echo "❌ Backend API is not responding"
@@ -53,7 +53,7 @@ fi
 
 # Test frontend
 echo "🧪 Testing frontend..."
-if curl -f http://localhost:3000/health > /dev/null 2>&1; then
+if curl -f http://81.173.84.37:3000/health > /dev/null 2>&1; then
     echo "✅ Frontend is responding"
 else
     echo "❌ Frontend is not responding"
@@ -63,11 +63,11 @@ fi
 
 # Display access information
 echo ""
-echo "🎉 QR Photo Upload LOCAL deployment complete!"
+echo "🎉 QR Photo Upload deployment complete!"
 echo ""
-echo "📱 Frontend: http://localhost:3000"
-echo "🔗 Admin Login: http://localhost:3000/admin/login"
-echo "⚙️  Backend API: http://localhost:8001/api/"
+echo "📱 Frontend: http://81.173.84.37:3000"
+echo "🔗 Admin Login: http://81.173.84.37:3000/admin/login"
+echo "⚙️  Backend API: http://81.173.84.37:8001/api/"
 echo ""
 echo "👤 Default Admin Credentials:"
 echo "   Username: superadmin"
@@ -83,3 +83,6 @@ echo "🔧 If you encounter issues, check the logs:"
 echo "   $DOCKER_COMPOSE -f docker-compose.local.yml logs backend"
 echo "   $DOCKER_COMPOSE -f docker-compose.local.yml logs frontend"
 echo "   $DOCKER_COMPOSE -f docker-compose.local.yml logs mongodb"
+echo ""
+echo "🌐 Your QR Photo Upload app is now accessible from anywhere at:"
+echo "   http://81.173.84.37:3000"
