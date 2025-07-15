@@ -1197,6 +1197,9 @@ class BackendTester:
             self.test_session_restrictions()
             self.test_session_access_control()
             
+            # Test bulk download functionality
+            self.test_bulk_download()
+            
             self.test_public_routes()
             
             # Print summary
