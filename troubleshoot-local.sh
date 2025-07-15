@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "🔍 QR Photo Upload - Local Server Troubleshooting"
-echo "================================================="
+echo "🔍 QR Photo Upload - Server 81.173.84.37 Troubleshooting"
+echo "======================================================="
 
 # Check if Docker is available
 if ! command -v docker &> /dev/null; then
@@ -58,16 +58,16 @@ echo "================"
 
 # Test backend
 echo "Testing backend API..."
-if curl -f http://localhost:8001/api/ > /dev/null 2>&1; then
+if curl -f http://81.173.84.37:8001/api/ > /dev/null 2>&1; then
     echo "✅ Backend API is responding"
-    echo "   Response: $(curl -s http://localhost:8001/api/)"
+    echo "   Response: $(curl -s http://81.173.84.37:8001/api/)"
 else
     echo "❌ Backend API is not responding"
 fi
 
 # Test frontend
 echo "Testing frontend..."
-if curl -f http://localhost:3000/health > /dev/null 2>&1; then
+if curl -f http://81.173.84.37:3000/health > /dev/null 2>&1; then
     echo "✅ Frontend is responding"
 else
     echo "❌ Frontend is not responding"
@@ -80,6 +80,18 @@ if docker exec qr-photo-mongodb mongosh --eval "db.runCommand('ping')" > /dev/nu
 else
     echo "❌ MongoDB is not responding"
 fi
+
+echo ""
+echo "🔥 Firewall Check:"
+echo "=================="
+echo "Make sure these ports are open on your server:"
+echo "  - Port 3000 (Frontend)"
+echo "  - Port 8001 (Backend)"
+echo "  - Port 27017 (MongoDB - optional, only if external access needed)"
+echo ""
+echo "Common firewall commands:"
+echo "  Ubuntu/Debian: sudo ufw allow 3000 && sudo ufw allow 8001"
+echo "  CentOS/RHEL: sudo firewall-cmd --permanent --add-port=3000/tcp && sudo firewall-cmd --permanent --add-port=8001/tcp && sudo firewall-cmd --reload"
 
 echo ""
 echo "📊 Recent Logs:"
@@ -109,6 +121,11 @@ echo "3. Check logs:"
 echo "   $DOCKER_COMPOSE -f docker-compose.local.yml logs -f"
 echo ""
 echo "4. Access URLs:"
-echo "   Frontend: http://localhost:3000"
-echo "   Backend: http://localhost:8001/api/"
-echo "   Admin: http://localhost:3000/admin/login"
+echo "   Frontend: http://81.173.84.37:3000"
+echo "   Backend: http://81.173.84.37:8001/api/"
+echo "   Admin: http://81.173.84.37:3000/admin/login"
+echo ""
+echo "5. Check firewall settings:"
+echo "   sudo ufw status"
+echo "   sudo ufw allow 3000"
+echo "   sudo ufw allow 8001"
