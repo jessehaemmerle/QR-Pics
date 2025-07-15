@@ -898,7 +898,9 @@ const UploadPage = () => {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
+  const [uploadComplete, setUploadComplete] = useState(false);
   const [error, setError] = useState('');
+  const [successCount, setSuccessCount] = useState(0);
 
   useEffect(() => {
     checkSession();
@@ -914,8 +916,14 @@ const UploadPage = () => {
   };
 
   const handleFileChange = (e) => {
+    if (uploading) return; // Prevent file selection during upload
+    
     const selectedFiles = Array.from(e.target.files);
     setFiles(selectedFiles);
+    setUploadProgress({});
+    setUploadComplete(false);
+    setError('');
+    setSuccessCount(0);
   };
 
   const uploadFile = async (file) => {
@@ -944,10 +952,12 @@ const UploadPage = () => {
   };
 
   const handleUpload = async () => {
-    if (files.length === 0) return;
+    if (files.length === 0 || uploading) return;
     
     setUploading(true);
     setError('');
+    setUploadComplete(false);
+    let successfulUploads = 0;
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -955,16 +965,26 @@ const UploadPage = () => {
         setUploadProgress(prev => ({ ...prev, [i]: 'uploading' }));
         await uploadFile(file);
         setUploadProgress(prev => ({ ...prev, [i]: 'completed' }));
+        successfulUploads++;
       } catch (error) {
         setUploadProgress(prev => ({ ...prev, [i]: 'error' }));
         setError(`Failed to upload ${file.name}`);
       }
     }
     
+    setSuccessCount(successfulUploads);
+    setUploadComplete(true);
     setUploading(false);
+    
+    // Auto-reload after successful upload on mobile
+    if (successfulUploads > 0) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000); // Give user time to see success message
+    }
   };
 
-  if (error) {
+  if (error && !session) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center">
         <div className="bg-white p-8 rounded-lg shadow-lg text-center">
@@ -995,6 +1015,27 @@ const UploadPage = () => {
               Session: {session.session_name}
             </p>
             
+            {/* Success Message */}
+            {uploadComplete && successCount > 0 && (
+              <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center">
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-green-800 font-semibold">
+                      Upload Complete!
+                    </p>
+                    <p className="text-green-600 text-sm">
+                      {successCount} photo{successCount !== 1 ? 's' : ''} uploaded successfully. Page will reload in 2 seconds...
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1005,12 +1046,15 @@ const UploadPage = () => {
                   multiple
                   accept="image/*"
                   onChange={handleFileChange}
-                  className="block w-full text-sm text-gray-500
+                  disabled={uploading}
+                  className={`block w-full text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
                     file:rounded-full file:border-0
                     file:text-sm file:font-semibold
                     file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100"
+                    hover:file:bg-blue-100
+                    ${uploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
+                  `}
                 />
               </div>
               
@@ -1019,10 +1063,10 @@ const UploadPage = () => {
                   <h3 className="text-lg font-medium text-gray-900 mb-3">
                     Selected Files ({files.length})
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
                     {files.map((file, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <span className="text-sm text-gray-700">{file.name}</span>
+                        <span className="text-sm text-gray-700 flex-1 truncate pr-4">{file.name}</span>
                         <div className="flex items-center space-x-2">
                           <span className="text-xs text-gray-500">
                             {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -1053,14 +1097,14 @@ const UploadPage = () => {
               
               <button
                 onClick={handleUpload}
-                disabled={files.length === 0 || uploading}
+                disabled={files.length === 0 || uploading || uploadComplete}
                 className={`w-full py-3 px-4 rounded-lg font-medium ${
-                  files.length === 0 || uploading
+                  files.length === 0 || uploading || uploadComplete
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-blue-500 hover:bg-blue-600 text-white'
                 }`}
               >
-                {uploading ? 'Uploading...' : 'Upload Photos'}
+                {uploading ? 'Uploading...' : uploadComplete ? 'Upload Complete!' : 'Upload Photos'}
               </button>
               
               {error && (
