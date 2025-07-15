@@ -31,11 +31,18 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
+# Check if Docker Compose is installed (try both versions)
+DOCKER_COMPOSE_CMD=""
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+else
     print_error "Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
+
+print_status "Using Docker Compose command: $DOCKER_COMPOSE_CMD"
 
 # Parse command line arguments
 ENVIRONMENT="development"
@@ -90,22 +97,22 @@ fi
 # Clean up if requested
 if [ "$CLEAN" = true ]; then
     print_status "Cleaning up existing containers and volumes..."
-    docker-compose -f $COMPOSE_FILE down --volumes --remove-orphans
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down --volumes --remove-orphans
     docker system prune -f
 fi
 
 # Build images if requested
 if [ "$BUILD" = true ]; then
     print_status "Building Docker images..."
-    docker-compose -f $COMPOSE_FILE build --no-cache
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build --no-cache
 fi
 
 # Start services
 print_status "Starting services..."
 if [ "$DETACHED" = true ]; then
-    docker-compose -f $COMPOSE_FILE up -d
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d
 else
-    docker-compose -f $COMPOSE_FILE up
+    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up
 fi
 
 # Wait for services to be healthy
@@ -114,7 +121,7 @@ if [ "$DETACHED" = true ]; then
     
     # Wait for MongoDB
     print_status "Waiting for MongoDB to be ready..."
-    until docker exec qr-photo-mongodb-${ENVIRONMENT} mongosh --eval "db.runCommand('ping')" > /dev/null 2>&1; do
+    until docker exec qr-photo-mongodb mongosh --eval "db.runCommand('ping')" > /dev/null 2>&1; do
         sleep 2
     done
     
@@ -145,8 +152,8 @@ if [ "$DETACHED" = true ]; then
     echo "   Password: changeme123"
     echo ""
     echo "🐳 To stop the services:"
-    echo "   docker-compose -f $COMPOSE_FILE down"
+    echo "   $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down"
     echo ""
     echo "📊 To view logs:"
-    echo "   docker-compose -f $COMPOSE_FILE logs -f"
+    echo "   $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f"
 fi
