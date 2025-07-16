@@ -316,6 +316,66 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+  - task: "Session deletion functionality"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented DELETE /api/sessions/{session_id} endpoint that marks sessions as inactive instead of deleting them"
+      - working: true
+        agent: "testing"
+        comment: "✅ SESSION DELETION TESTING PASSED: DELETE /api/sessions/{session_id} endpoint working perfectly - Session correctly marked as inactive after deletion, verified by attempting photo upload to deleted session which properly returns 404 'Session not found or inactive' error. Session deletion functionality is fully functional and production-ready."
+
+  - task: "User deletion functionality"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented DELETE /api/users/{user_id} endpoint that permanently deletes users from database with proper authorization checks"
+      - working: true
+        agent: "testing"
+        comment: "✅ USER DELETION TESTING PASSED: DELETE /api/users/{user_id} endpoint working perfectly - User successfully deleted from database, verified by checking user list after deletion and confirming user no longer exists. Proper authorization checks in place (superadmin only). User deletion functionality is fully functional and production-ready."
+
+  - task: "User update functionality"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented PUT /api/users/{user_id} endpoint supporting updates to session restrictions, superadmin status, password, and username with proper validation"
+      - working: true
+        agent: "testing"
+        comment: "✅ USER UPDATE TESTING PASSED: PUT /api/users/{user_id} endpoint working excellently - All update operations successful: (1) Session restrictions updated correctly, (2) Superadmin status promotion working, (3) Password updates working, (4) Username updates working with proper validation. All core update functionality is fully operational and production-ready."
+
+  - task: "QR code generation with server IP configuration"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Updated QR code generation to use FRONTEND_URL environment variable set to http://81.173.84.37 for proper external access"
+      - working: true
+        agent: "testing"
+        comment: "✅ QR CODE SERVER IP TESTING PASSED: QR code generation working perfectly with new server IP configuration - QR codes correctly point to http://81.173.84.37/upload/{session_id} as expected. Server IP configuration is properly implemented and functional."
+
 agent_communication:
   - agent: "main"
     message: "Initial implementation complete. Created QR photo upload system with session management, authentication, and mobile upload interface. Backend has JWT auth, session/photo CRUD, QR generation. Frontend has admin dashboard, mobile upload page, and auth system. Default superadmin: username=superadmin, password=changeme123. Ready for comprehensive testing."
@@ -331,3 +391,5 @@ agent_communication:
     message: "AUTHENTICATION DIAGNOSIS: Investigated persistent 'invalid credentials' error reported by user. Found that backend authentication is working perfectly - curl tests show successful login with superadmin/changeme123 credentials returning valid JWT tokens. Frontend login page displays correctly with proper credentials shown. The issue appears to be in the frontend authentication flow or React app state management. Need to verify if the issue is user-related (wrong credentials) or a frontend JavaScript error during login process."
   - agent: "testing"
     message: "✅ COMPREHENSIVE AUTHENTICATION VERIFICATION COMPLETE: Conducted thorough backend testing in response to user's 'invalid credentials' error report. CRITICAL FINDING: Backend authentication system is working PERFECTLY (4/4 authentication tests passed with 100% success rate). Key verification results: (1) Superadmin login with superadmin/changeme123 credentials works flawlessly - returns valid JWT tokens, (2) Invalid credentials properly rejected with 401 status, (3) JWT token validation working correctly, (4) Protected endpoints properly secured with 403 for unauthorized access, (5) Manual curl tests confirm perfect backend functionality. CONCLUSION: The user's login issue is NOT a backend problem. Backend is fully functional. Issue is likely: (a) User typing incorrect credentials, (b) Frontend JavaScript error during login, (c) Network connectivity issue, or (d) Frontend state management problem. Backend authentication system requires no fixes - it's working perfectly. Overall backend testing: 31/43 tests passed (72.1% success rate) with all core functionality working. Failed tests were network timeouts during error handling, not functional failures."
+  - agent: "testing"
+    message: "✅ NEW FUNCTIONALITY TESTING COMPLETE: Comprehensive testing performed on newly added functionality as requested in review with 100% success rate (7/7 tests passed). KEY FINDINGS: (1) SESSION DELETION: DELETE /api/sessions/{session_id} endpoint working perfectly - sessions correctly marked as inactive, verified by attempting photo upload to deleted session which properly returns 404 error. (2) USER DELETION: DELETE /api/users/{user_id} endpoint working perfectly - users successfully deleted from database with proper authorization checks. (3) USER UPDATE FUNCTIONALITY: PUT /api/users/{user_id} endpoint working excellently - all update operations successful including session restrictions, superadmin status promotion, password updates, and username updates with proper validation. (4) QR CODE SERVER IP CONFIGURATION: QR code generation working perfectly with new server IP - QR codes correctly point to http://81.173.84.37/upload/{session_id} as expected. ALL NEW FUNCTIONALITY IS FULLY FUNCTIONAL AND PRODUCTION-READY. The newly added session deletion, user management, and QR code configuration features are working perfectly and ready for production use."
