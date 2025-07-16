@@ -756,6 +756,24 @@ const Home = () => {
     link.click();
   };
 
+  const deleteSession = async (sessionId, sessionName) => {
+    if (window.confirm(`Are you sure you want to delete the session "${sessionName}"? This action cannot be undone.`)) {
+      try {
+        await axios.delete(`${API}/sessions/${sessionId}`);
+        fetchSessions();
+        // Remove QR code from state if it exists
+        setQrCodes(prev => {
+          const newQrCodes = { ...prev };
+          delete newQrCodes[sessionId];
+          return newQrCodes;
+        });
+      } catch (error) {
+        console.error('Error deleting session:', error);
+        alert('Error deleting session: ' + (error.response?.data?.detail || 'Unknown error'));
+      }
+    }
+  };
+
   if (!user) {
     return <Navigate to="/admin/login" />;
   }
