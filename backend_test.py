@@ -27,6 +27,12 @@ def load_env_file(file_path):
 # Get backend URL from frontend .env
 frontend_env = load_env_file('/app/frontend/.env')
 BACKEND_URL = frontend_env.get('REACT_APP_BACKEND_URL', 'http://localhost:8001')
+
+# For testing purposes, use localhost since we're testing from within the container
+# The external URL is for frontend access only
+if BACKEND_URL.startswith('http://81.173.84.37'):
+    BACKEND_URL = 'http://localhost:8001'
+
 API_BASE_URL = f"{BACKEND_URL}/api"
 
 print(f"Testing backend at: {API_BASE_URL}")
