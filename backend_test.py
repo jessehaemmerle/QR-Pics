@@ -1179,6 +1179,195 @@ class BackendTester:
         
         return total_failed == 0
 
+    def test_new_functionality_review(self):
+        """Test newly added functionality as requested in review"""
+        print("\n=== Testing New Functionality (Review Request) ===")
+        
+        if not self.auth_token:
+            self.log_result('new_functionality', 'New functionality tests', False, "No auth token available")
+            return
+
+        # Test 1: Session deletion functionality
+        print("\n--- Testing Session Deletion ---")
+        session_data = {"name": "Test Session for Deletion", "description": "Will be deleted"}
+        response = self.make_request('POST', '/sessions', session_data)
+        
+        if response and response.status_code == 200:
+            session_id = response.json()['id']
+            self.created_resources['sessions'].append(session_id)
+            
+            # Delete the session
+            response = self.make_request('DELETE', f'/sessions/{session_id}')
+            if response and response.status_code == 200:
+                # Verify session is marked as inactive by trying to upload to it
+                test_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAI9jU77mgAAAABJRU5ErkJggg=="
+                photo_data = {
+                    "session_id": session_id,
+                    "filename": "test_inactive.png",
+                    "content_type": "image/png",
+                    "image_data": test_image_base64,
+                    "file_size": 100
+                }
+                
+                upload_response = self.make_request('POST', '/photos', photo_data, auth_required=False)
+                if upload_response and upload_response.status_code == 404:
+                    self.log_result('new_functionality', 'Session deletion marks inactive', True, 
+                                  "Session correctly marked as inactive after deletion")
+                else:
+                    self.log_result('new_functionality', 'Session deletion marks inactive', False, 
+                                  f"Session not properly marked inactive. Upload status: {upload_response.status_code if upload_response else 'No response'}")
+            else:
+                self.log_result('new_functionality', 'Session deletion', False, 
+                              f"Session deletion failed. Status: {response.status_code if response else 'No response'}")
+        else:
+            self.log_result('new_functionality', 'Session deletion setup', False, "Failed to create test session")
+
+        # Test 2: User deletion functionality
+        print("\n--- Testing User Deletion ---")
+        user_data = {
+            "username": f"delete_test_{uuid.uuid4().hex[:8]}",
+            "password": "deletetest123",
+            "is_superadmin": False
+        }
+        
+        response = self.make_request('POST', '/users', user_data)
+        if response and response.status_code == 200:
+            user_id = response.json()['id']
+            
+            # Delete the user
+            response = self.make_request('DELETE', f'/users/{user_id}')
+            if response and response.status_code == 200:
+                # Verify user is deleted by trying to get user list and checking it's not there
+                users_response = self.make_request('GET', '/users')
+                if users_response and users_response.status_code == 200:
+                    users = users_response.json()
+                    user_ids = [u['id'] for u in users]
+                    if user_id not in user_ids:
+                        self.log_result('new_functionality', 'User deletion', True, 
+                                      "User successfully deleted from database")
+                    else:
+                        self.log_result('new_functionality', 'User deletion', False, 
+                                      "User still exists after deletion")
+                else:
+                    self.log_result('new_functionality', 'User deletion verification', False, 
+                                  "Failed to verify user deletion")
+            else:
+                self.log_result('new_functionality', 'User deletion', False, 
+                              f"User deletion failed. Status: {response.status_code if response else 'No response'}")
+        else:
+            self.log_result('new_functionality', 'User deletion setup', False, "Failed to create test user")
+
+        # Test 3: User update functionality
+        print("\n--- Testing User Update Functionality ---")
+        
+        # Create test session for restrictions
+        session_data = {"name": "Update Test Session", "description": "For user update testing"}
+        session_response = self.make_request('POST', '/sessions', session_data)
+        session_id = session_response.json()['id'] if session_response and session_response.status_code == 200 else None
+        if session_id:
+            self.created_resources['sessions'].append(session_id)
+
+        # Create test user for updates
+        user_data = {
+            "username": f"update_test_{uuid.uuid4().hex[:8]}",
+            "password": "original123",
+            "is_superadmin": False,
+            "allowed_sessions": []
+        }
+        
+        response = self.make_request('POST', '/users', user_data)
+        if response and response.status_code == 200:
+            user_id = response.json()['id']
+            self.created_resources['users'].append(user_id)
+            
+            # Test 3a: Update session restrictions
+            if session_id:
+                update_data = {"allowed_sessions": [session_id]}
+                response = self.make_request('PUT', f'/users/{user_id}', update_data)
+                if response and response.status_code == 200:
+                    updated_user = response.json()
+                    if updated_user.get('allowed_sessions') == [session_id]:
+                        self.log_result('new_functionality', 'Update user session restrictions', True, 
+                                      "Session restrictions updated successfully")
+                    else:
+                        self.log_result('new_functionality', 'Update user session restrictions', False, 
+                                      "Session restrictions not properly updated")
+                else:
+                    self.log_result('new_functionality', 'Update user session restrictions', False, 
+                                  f"Status: {response.status_code if response else 'No response'}")
+            
+            # Test 3b: Update superadmin status
+            update_data = {"is_superadmin": True}
+            response = self.make_request('PUT', f'/users/{user_id}', update_data)
+            if response and response.status_code == 200:
+                updated_user = response.json()
+                if updated_user.get('is_superadmin') == True:
+                    self.log_result('new_functionality', 'Update user superadmin status', True, 
+                                  "Superadmin status updated successfully")
+                else:
+                    self.log_result('new_functionality', 'Update user superadmin status', False, 
+                                  "Superadmin status not properly updated")
+            else:
+                self.log_result('new_functionality', 'Update user superadmin status', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+            
+            # Test 3c: Update password
+            update_data = {"password": "newpassword456"}
+            response = self.make_request('PUT', f'/users/{user_id}', update_data)
+            if response and response.status_code == 200:
+                self.log_result('new_functionality', 'Update user password', True, 
+                              "Password updated successfully")
+            else:
+                self.log_result('new_functionality', 'Update user password', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+            
+            # Test 3d: Update username
+            new_username = f"updated_{uuid.uuid4().hex[:8]}"
+            update_data = {"username": new_username}
+            response = self.make_request('PUT', f'/users/{user_id}', update_data)
+            if response and response.status_code == 200:
+                updated_user = response.json()
+                if updated_user.get('username') == new_username:
+                    self.log_result('new_functionality', 'Update username', True, 
+                                  f"Username updated to: {new_username}")
+                else:
+                    self.log_result('new_functionality', 'Update username', False, 
+                                  "Username not properly updated")
+            else:
+                self.log_result('new_functionality', 'Update username', False, 
+                              f"Status: {response.status_code if response else 'No response'}")
+        else:
+            self.log_result('new_functionality', 'User update setup', False, "Failed to create test user")
+
+        # Test 4: QR code generation with new server IP
+        print("\n--- Testing QR Code with Server IP Configuration ---")
+        session_data = {"name": "QR Test Session", "description": "For QR code testing"}
+        response = self.make_request('POST', '/sessions', session_data)
+        
+        if response and response.status_code == 200:
+            session_id = response.json()['id']
+            self.created_resources['sessions'].append(session_id)
+            
+            # Generate QR code
+            response = self.make_request('GET', f'/sessions/{session_id}/qr')
+            if response and response.status_code == 200:
+                qr_data = response.json()
+                upload_url = qr_data.get('upload_url', '')
+                
+                # Check if QR code points to the correct server IP
+                expected_url = f"http://81.173.84.37/upload/{session_id}"
+                if upload_url == expected_url:
+                    self.log_result('new_functionality', 'QR code server IP configuration', True, 
+                                  f"QR code correctly points to: {upload_url}")
+                else:
+                    self.log_result('new_functionality', 'QR code server IP configuration', False, 
+                                  f"Expected: {expected_url}, Got: {upload_url}")
+            else:
+                self.log_result('new_functionality', 'QR code generation', False, 
+                              f"QR generation failed. Status: {response.status_code if response else 'No response'}")
+        else:
+            self.log_result('new_functionality', 'QR code setup', False, "Failed to create test session")
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("Starting comprehensive backend testing...")
@@ -1201,6 +1390,9 @@ class BackendTester:
             self.test_bulk_download()
             
             self.test_public_routes()
+            
+            # Test new functionality as requested in review
+            self.test_new_functionality_review()
             
             # Print summary
             success = self.print_summary()
