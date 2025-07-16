@@ -899,12 +899,14 @@ const Home = () => {
                   >
                     View Photos
                   </button>
-                  <button
-                    onClick={() => deleteSession(session.id, session.name)}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm"
-                  >
-                    Delete
-                  </button>
+                  {user.is_superadmin && (
+                    <button
+                      onClick={() => deleteSession(session.id, session.name)}
+                      className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
