@@ -321,6 +321,7 @@ const UserManagement = () => {
     allowed_sessions: []
   });
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
