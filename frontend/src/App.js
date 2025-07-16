@@ -633,36 +633,36 @@ const UserManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id}>
+                {users.map((tableUser) => (
+                  <tr key={tableUser.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                      <div className="text-sm font-medium text-gray-900">{tableUser.username}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.is_superadmin 
+                        tableUser.is_superadmin 
                           ? 'bg-red-100 text-red-800' 
                           : 'bg-green-100 text-green-800'
                       }`}>
-                        {user.is_superadmin ? 'Superadmin' : 'User'}
+                        {tableUser.is_superadmin ? 'Superadmin' : 'User'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">
-                        {user.is_superadmin ? (
+                        {tableUser.is_superadmin ? (
                           <span className="text-blue-600">All Sessions</span>
-                        ) : user.allowed_sessions.length === 0 ? (
+                        ) : tableUser.allowed_sessions.length === 0 ? (
                           <span className="text-blue-600">All Sessions</span>
                         ) : (
                           <div className="space-y-1">
-                            {user.allowed_sessions.slice(0, 3).map(sessionId => (
+                            {tableUser.allowed_sessions.slice(0, 3).map(sessionId => (
                               <div key={sessionId} className="text-xs bg-gray-100 px-2 py-1 rounded">
                                 {getSessionName(sessionId)}
                               </div>
                             ))}
-                            {user.allowed_sessions.length > 3 && (
+                            {tableUser.allowed_sessions.length > 3 && (
                               <div className="text-xs text-gray-500">
-                                +{user.allowed_sessions.length - 3} more
+                                +{tableUser.allowed_sessions.length - 3} more
                               </div>
                             )}
                           </div>
@@ -670,19 +670,19 @@ const UserManagement = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {new Date(tableUser.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => setEditingUser(user)}
+                          onClick={() => setEditingUser(tableUser)}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           Edit
                         </button>
-                        {user.id !== user.id && (
+                        {user.id !== tableUser.id && (
                           <button
-                            onClick={() => deleteUser(user.id)}
+                            onClick={() => deleteUser(tableUser.id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete
